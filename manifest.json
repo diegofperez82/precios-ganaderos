@@ -1,0 +1,14 @@
+{
+  "name": "Precios Ganaderos",
+  "short_name": "Precios",
+  "description": "Precios semanales de terneros de invernada e índice novillo arrendamiento",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f7f4",
+  "theme_color": "#2e5d2a",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
