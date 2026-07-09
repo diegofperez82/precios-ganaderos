@@ -105,7 +105,6 @@
 <script>
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 
-// ---- Configuracion (Google Form + planilla publicada) ----
 const FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSdU6GJzxCHErFHKn8QHUdCDo8Dw5Jp60ex1XCdylfzT0qteQA/formResponse';
 const ENTRY_FECHA = '847230433';
 const ENTRY_MM = '2074787504';
@@ -114,11 +113,10 @@ const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQLdZv3vNTb5i4g
 const $ = id => document.getElementById(id);
 const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const fmt = n => (Math.round(n*10)/10).toLocaleString('es-AR');
-let DATOS = {};   // { 'yyyy-mm-dd': mm }
+let DATOS = {};
 let charts = {};
-let HL = null;    // resaltado: {type:'mes'|'trim', i} o null
+let HL = null;
 
-// ---- util ----
 function hoyISO(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 function parseFecha(s){
   s = s.trim();
@@ -144,19 +142,18 @@ function parseCSV(text){
 function getPend(){ try { return JSON.parse(localStorage.getItem('lluvia_pend')) || {}; } catch(e){ return {}; } }
 function setPend(p){ localStorage.setItem('lluvia_pend', JSON.stringify(p)); }
 
-// ---- colores y resaltado ----
 function col(hex, a){ const n = parseInt(hex.slice(1), 16); return 'rgba(' + (n>>16) + ',' + ((n>>8)&255) + ',' + (n&255) + ',' + a + ')'; }
 const AZUL = '#2874a6';
 const CELES = ['#2874a6','#5dade2','#1a5276','#7fb3d5','#154360','#a9cce3','#3498db','#85c1e9','#21618c','#6bb9f0','#5499c7','#aed6f1'];
 const TRIMC = ['#1a5276','#2874a6','#5dade2','#aed6f1'];
 const DIM = 0.15;
 
-function aMes(i){                       // opacidad para el mes i
+function aMes(i){
   if (!HL) return 1;
   if (HL.type === 'mes') return i === HL.i ? 1 : DIM;
   return Math.floor(i/3) === HL.i ? 1 : DIM;
 }
-function aTrim(t){                      // opacidad para el trimestre t
+function aTrim(t){
   if (!HL) return 1;
   if (HL.type === 'trim') return t === HL.i ? 1 : DIM;
   return Math.floor(HL.i/3) === t ? 1 : DIM;
@@ -167,13 +164,12 @@ function setHL(type, i){
   const info = $('hlInfo');
   if (HL){
     info.style.display = 'inline-block';
-    info.textContent = '🔍 Resaltando: ' + (HL.type === 'mes' ? MESES[HL.i] : (HL.i+1) + '° trimestre') + ' — tocá acá para quitar';
+    info.textContent = 'Resaltando: ' + (HL.type === 'mes' ? MESES[HL.i] : (HL.i+1) + ' trimestre') + ' - toca aca para quitar';
     info.onclick = () => { HL = null; dibujar(); info.style.display = 'none'; };
   } else info.style.display = 'none';
   dibujar();
 }
 
-// ---- carga de datos ----
 async function cargar(){
   $('status').textContent = 'Cargando…';
   try {
@@ -204,7 +200,6 @@ async function cargar(){
   dibujar();
 }
 
-// ---- envio ----
 $('btnSave').onclick = async () => {
   const f = $('inFecha').value;
   const mm = parseFloat(($('inMm').value || '').replace(',', '.'));
@@ -223,7 +218,7 @@ $('btnSave').onclick = async () => {
     await fetch(FORM_URL, { method:'POST', mode:'no-cors', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: body.toString() });
     const pend = getPend(); pend[f] = { mm, ts: Date.now() }; setPend(pend);
     DATOS[f] = mm;
-    msg.className = 'ok'; msg.textContent = '✔ Guardado: ' + d + '/' + mo + ' → ' + fmt(mm) + ' mm';
+    msg.className = 'ok'; msg.textContent = 'Guardado: ' + d + '/' + mo + ' - ' + fmt(mm) + ' mm';
     $('inMm').value = '';
     armarSelectores(); dibujar();
   } catch(e) {
@@ -234,7 +229,6 @@ $('btnSave').onclick = async () => {
 
 $('btnReload').onclick = cargar;
 
-// ---- selectores ----
 function armarSelectores(){
   const years = [...new Set(Object.keys(DATOS).map(f => f.slice(0,4)))].sort();
   const nowY = String(new Date().getFullYear());
@@ -248,14 +242,12 @@ function armarSelectores(){
   selM.onchange = dibujar;
 }
 
-// ---- graficos ----
 function mk(id, cfg){ if (charts[id]) charts[id].destroy(); charts[id] = new Chart($(id), cfg); }
 
 function dibujar(){
   const year = $('selYear').value || String(new Date().getFullYear());
   const mes = +($('selMonth').value || new Date().getMonth());
 
-  // dia a dia del mes elegido
   const nd = new Date(+year, mes+1, 0).getDate();
   const dias = Array.from({length:nd}, (_, i) => i+1);
   const serieDia = dias.map(d => DATOS[year + '-' + String(mes+1).padStart(2,'0') + '-' + String(d).padStart(2,'0')] ?? 0);
@@ -265,7 +257,6 @@ function dibujar(){
       tooltip:{ callbacks:{ title: c => c[0].label + ' de ' + MESES[mes], label: c => fmt(c.parsed.y) + ' mm' } } },
       scales:{ y:{ beginAtZero:true, ticks:{ callback:v => v + ' mm' } } } } });
 
-  // acumulados del año
   const porMes = Array(12).fill(0);
   for (const f in DATOS) if (f.startsWith(year + '-')) porMes[+f.slice(5,7)-1] += DATOS[f];
   const porTrim = [0,1,2,3].map(t => porMes[t*3] + porMes[t*3+1] + porMes[t*3+2]);
@@ -280,4 +271,37 @@ function dibujar(){
       scales:{ y:{ beginAtZero:true, ticks:{ callback:v => v + ' mm' } } } } });
 
   mk('chTrim', { type:'bar',
-    data:{ labels:['1er trim. (E-F-M)','2do trim. (A-M-J)','3er trim. (J-A-S)
+    data:{ labels:['1er trim. (E-F-M)','2do trim. (A-M-J)','3er trim. (J-A-S)','4to trim. (O-N-D)'],
+      datasets:[{ data:porTrim, backgroundColor: TRIMC.map((c,t) => col(c, aTrim(t))), borderRadius:4 }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      onClick: (e, els) => { if (els.length) setHL('trim', els[0].index); },
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: c => fmt(c.parsed.y) + ' mm' } } },
+      scales:{ y:{ beginAtZero:true, ticks:{ callback:v => v + ' mm' } } } } });
+
+  const pctLabel = c => {
+    const tot = c.dataset.data.reduce((a,b) => a+b, 0);
+    return c.label + ': ' + fmt(c.parsed) + ' mm (' + (tot ? Math.round(c.parsed/tot*1000)/10 : 0) + '%)';
+  };
+
+  const mesesCon = MESES.map((m, i) => ({m, i, v: porMes[i]})).filter(x => x.v > 0);
+  mk('chTortaMes', { type:'pie',
+    data:{ labels: mesesCon.map(x => x.m),
+      datasets:[{ data: mesesCon.map(x => x.v), backgroundColor: mesesCon.map(x => col(CELES[x.i], aMes(x.i))) }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      onClick: (e, els) => { if (els.length) setHL('mes', mesesCon[els[0].index].i); },
+      plugins:{ legend:{ position:'bottom' }, tooltip:{ callbacks:{ label: pctLabel } } } } });
+
+  const trimCon = [0,1,2,3].map(t => ({t, v: porTrim[t]})).filter(x => x.v > 0);
+  mk('chTortaTrim', { type:'pie',
+    data:{ labels: trimCon.map(x => (x.t+1) + ' trim.'),
+      datasets:[{ data: trimCon.map(x => x.v), backgroundColor: trimCon.map(x => col(TRIMC[x.t], aTrim(x.t))) }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      onClick: (e, els) => { if (els.length) setHL('trim', trimCon[els[0].index].t); },
+      plugins:{ legend:{ position:'bottom' }, tooltip:{ callbacks:{ label: pctLabel } } } } });
+}
+
+$('inFecha').value = hoyISO();
+cargar();
+</script>
+</body>
+</html>
