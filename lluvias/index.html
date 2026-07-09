@@ -33,8 +33,9 @@
   .selrow select { font-size:14px; padding:6px 10px; }
   .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   @media (max-width:700px){ .grid2 { grid-template-columns:1fr; } }
-  .chip { background:#e3eef6; border-radius:8px; padding:6px 12px; font-size:12px; display:inline-block; margin-bottom:8px; }
+  .chip { background:#e3eef6; border-radius:8px; padding:6px 12px; font-size:12px; display:inline-block; margin-bottom:4px; }
   .chip b { font-size:16px; }
+  #hlInfo { display:none; background:#fff8e1; border:1px solid #f0e0a0; border-radius:8px; padding:6px 12px; font-size:13px; margin-left:6px; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -66,6 +67,8 @@
     <span class="muted" id="status"></span>
   </div>
   <div class="chip">Total del año <b id="totYear">–</b> mm</div>
+  <span id="hlInfo"></span>
+  <div class="muted">💡 Tocá un mes o un trimestre en cualquier gráfico para resaltarlo en todos. Tocalo de nuevo para volver.</div>
 </div>
 
 <div class="card">
@@ -113,14 +116,15 @@ const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov'
 const fmt = n => (Math.round(n*10)/10).toLocaleString('es-AR');
 let DATOS = {};   // { 'yyyy-mm-dd': mm }
 let charts = {};
+let HL = null;    // resaltado: {type:'mes'|'trim', i} o null
 
 // ---- util ----
 function hoyISO(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 function parseFecha(s){
   s = s.trim();
-  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);          // yyyy-mm-dd
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m) return m[1] + '-' + m[2].padStart(2,'0') + '-' + m[3].padStart(2,'0');
-  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);          // dd/mm/yyyy
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
   if (m){ let y = +m[3]; if (y < 100) y += 2000; return y + '-' + m[2].padStart(2,'0') + '-' + m[1].padStart(2,'0'); }
   return null;
 }
@@ -140,6 +144,35 @@ function parseCSV(text){
 function getPend(){ try { return JSON.parse(localStorage.getItem('lluvia_pend')) || {}; } catch(e){ return {}; } }
 function setPend(p){ localStorage.setItem('lluvia_pend', JSON.stringify(p)); }
 
+// ---- colores y resaltado ----
+function col(hex, a){ const n = parseInt(hex.slice(1), 16); return 'rgba(' + (n>>16) + ',' + ((n>>8)&255) + ',' + (n&255) + ',' + a + ')'; }
+const AZUL = '#2874a6';
+const CELES = ['#2874a6','#5dade2','#1a5276','#7fb3d5','#154360','#a9cce3','#3498db','#85c1e9','#21618c','#6bb9f0','#5499c7','#aed6f1'];
+const TRIMC = ['#1a5276','#2874a6','#5dade2','#aed6f1'];
+const DIM = 0.15;
+
+function aMes(i){                       // opacidad para el mes i
+  if (!HL) return 1;
+  if (HL.type === 'mes') return i === HL.i ? 1 : DIM;
+  return Math.floor(i/3) === HL.i ? 1 : DIM;
+}
+function aTrim(t){                      // opacidad para el trimestre t
+  if (!HL) return 1;
+  if (HL.type === 'trim') return t === HL.i ? 1 : DIM;
+  return Math.floor(HL.i/3) === t ? 1 : DIM;
+}
+function setHL(type, i){
+  HL = (HL && HL.type === type && HL.i === i) ? null : {type, i};
+  if (HL && HL.type === 'mes') $('selMonth').value = String(HL.i);
+  const info = $('hlInfo');
+  if (HL){
+    info.style.display = 'inline-block';
+    info.textContent = '🔍 Resaltando: ' + (HL.type === 'mes' ? MESES[HL.i] : (HL.i+1) + '° trimestre') + ' — tocá acá para quitar';
+    info.onclick = () => { HL = null; dibujar(); info.style.display = 'none'; };
+  } else info.style.display = 'none';
+  dibujar();
+}
+
 // ---- carga de datos ----
 async function cargar(){
   $('status').textContent = 'Cargando…';
@@ -147,14 +180,12 @@ async function cargar(){
     const r = await fetch(CSV_URL + '&t=' + Date.now(), {cache:'no-store'});
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const rows = parseCSV(await r.text());
-    // columnas: Marca temporal, Fechas, Milimitreos (en orden de envio; la ultima gana)
     const map = {};
     for (let i = 1; i < rows.length; i++){
       const f = parseFecha(rows[i][1] || '');
       const v = parseFloat(String(rows[i][2] || '').replace(',', '.'));
       if (f && isFinite(v)) map[f] = v;
     }
-    // pendientes locales aun no reflejados en la planilla
     const pend = getPend();
     for (const f in pend){
       if (map[f] === pend[f].mm) delete pend[f];
@@ -219,7 +250,6 @@ function armarSelectores(){
 
 // ---- graficos ----
 function mk(id, cfg){ if (charts[id]) charts[id].destroy(); charts[id] = new Chart($(id), cfg); }
-const AZUL = '#2874a6', CELES = ['#2874a6','#5dade2','#aed6f1','#1a5276','#7fb3d5','#d4e6f1','#154360','#a9cce3','#3498db','#85c1e9','#21618c','#6bb9f0'];
 
 function dibujar(){
   const year = $('selYear').value || String(new Date().getFullYear());
@@ -230,7 +260,7 @@ function dibujar(){
   const dias = Array.from({length:nd}, (_, i) => i+1);
   const serieDia = dias.map(d => DATOS[year + '-' + String(mes+1).padStart(2,'0') + '-' + String(d).padStart(2,'0')] ?? 0);
   mk('chDia', { type:'bar',
-    data:{ labels:dias, datasets:[{ data:serieDia, backgroundColor:AZUL, borderRadius:3 }] },
+    data:{ labels:dias, datasets:[{ data:serieDia, backgroundColor: col(AZUL, aMes(mes)), borderRadius:3 }] },
     options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false},
       tooltip:{ callbacks:{ title: c => c[0].label + ' de ' + MESES[mes], label: c => fmt(c.parsed.y) + ' mm' } } },
       scales:{ y:{ beginAtZero:true, ticks:{ callback:v => v + ' mm' } } } } });
@@ -243,37 +273,11 @@ function dibujar(){
   $('totYear').textContent = fmt(totalY);
 
   mk('chMes', { type:'bar',
-    data:{ labels:MESES, datasets:[{ data:porMes, backgroundColor:AZUL, borderRadius:4 }] },
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false},
-      tooltip:{ callbacks:{ label: c => fmt(c.parsed.y) + ' mm' } } },
+    data:{ labels:MESES, datasets:[{ data:porMes, backgroundColor: MESES.map((_,i) => col(AZUL, aMes(i))), borderRadius:4 }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      onClick: (e, els) => { if (els.length) setHL('mes', els[0].index); },
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: c => fmt(c.parsed.y) + ' mm' } } },
       scales:{ y:{ beginAtZero:true, ticks:{ callback:v => v + ' mm' } } } } });
 
   mk('chTrim', { type:'bar',
-    data:{ labels:['1er trim. (E-F-M)','2do trim. (A-M-J)','3er trim. (J-A-S)','4to trim. (O-N-D)'],
-      datasets:[{ data:porTrim, backgroundColor:['#1a5276','#2874a6','#5dade2','#aed6f1'], borderRadius:4 }] },
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false},
-      tooltip:{ callbacks:{ label: c => fmt(c.parsed.y) + ' mm' } } },
-      scales:{ y:{ beginAtZero:true, ticks:{ callback:v => v + ' mm' } } } } });
-
-  const pctLabel = c => {
-    const tot = c.dataset.data.reduce((a,b) => a+b, 0);
-    return c.label + ': ' + fmt(c.parsed) + ' mm (' + (tot ? Math.round(c.parsed/tot*1000)/10 : 0) + '%)';
-  };
-  const mesesConLluvia = MESES.map((m,i) => ({m, v:porMes[i]})).filter(x => x.v > 0);
-  mk('chTortaMes', { type:'pie',
-    data:{ labels:mesesConLluvia.map(x => x.m), datasets:[{ data:mesesConLluvia.map(x => x.v), backgroundColor:CELES }] },
-    options:{ responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ position:'bottom' }, tooltip:{ callbacks:{ label: pctLabel } } } } });
-
-  const trimLabels = ['1er trim.','2do trim.','3er trim.','4to trim.'].filter((_,i) => porTrim[i] > 0);
-  mk('chTortaTrim', { type:'pie',
-    data:{ labels:trimLabels, datasets:[{ data:porTrim.filter(v => v > 0), backgroundColor:['#1a5276','#2874a6','#5dade2','#aed6f1'] }] },
-    options:{ responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ position:'bottom' }, tooltip:{ callbacks:{ label: pctLabel } } } } });
-}
-
-$('inFecha').value = hoyISO();
-cargar();
-</script>
-</body>
-</html>
+    data:{ labels:['1er trim. (E-F-M)','2do trim. (A-M-J)','3er trim. (J-A-S)

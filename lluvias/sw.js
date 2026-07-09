@@ -13,15 +13,4 @@ self.addEventListener('fetch', e => {
   const url = e.request.url;
   if (url.includes('docs.google.com')) return;               // el CSV siempre por red
   // pagina e iconos: primero red (asi las actualizaciones entran solas), cache si no hay senal
-  if (e.request.mode === 'navigate' || url.includes('index.html') || url.includes('icon-') || url.includes('manifest')) {
-    e.respondWith(
-      fetch(e.request).then(r => {
-        const copy = r.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copy));
-        return r;
-      }).catch(() => caches.match(e.request, {ignoreSearch:true}))
-    );
-  } else {
-    e.respondWith(caches.match(e.request, {ignoreSearch:true}).then(r => r || fetch(e.request)));
-  }
-});
+  if (e.request.mode === 'navigate' 
