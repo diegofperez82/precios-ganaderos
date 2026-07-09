@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1a5276">
+<title>Registro de Lluvias</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:12px; font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif; background:#eef4f8; color:#15303f; }
+  .wrap { max-width:900px; margin:0 auto; }
+  h1 { font-size:19px; margin:0 0 10px; }
+  .card { background:#fff; border:1px solid #d5e2ec; border-radius:12px; padding:14px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+  .card h2 { font-size:15px; margin:0 0 10px; }
+  .chartbox { position:relative; height:280px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:end; }
+  label { font-size:13px; font-weight:600; display:block; margin-bottom:4px; }
+  input, select { font-size:17px; padding:10px; border:1px solid #b7cbdb; border-radius:10px; background:#fff; color:inherit; }
+  input[type=date] { min-width:170px; }
+  input[type=text] { width:120px; }
+  button { font-size:17px; font-weight:600; padding:11px 22px; border:0; border-radius:10px; background:#1a5276; color:#fff; cursor:pointer; }
+  button:disabled { opacity:.5; }
+  .btn2 { background:#eef4f8; color:#1a5276; border:1px solid #b7cbdb; font-size:13px; padding:6px 12px; }
+  #msg { font-size:14px; margin-top:10px; min-height:18px; }
+  .ok { color:#1b7f3a; } .err { color:#b3261e; }
+  .muted { font-size:12px; color:#5c7385; }
+  .selrow { display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap; }
+  .selrow select { font-size:14px; padding:6px 10px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:700px){ .grid2 { grid-template-columns:1fr; } }
+  .chip { background:#e3eef6; border-radius:8px; padding:6px 12px; font-size:12px; display:inline-block; margin-bottom:8px; }
+  .chip b { font-size:16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>💧 Registro de Lluvias</h1>
+
+<div class="card">
+  <h2>Cargar lluvia del día</h2>
+  <div class="row">
+    <div>
+      <label>Fecha</label>
+      <input type="date" id="inFecha">
+    </div>
+    <div>
+      <label>Milímetros</label>
+      <input type="text" id="inMm" inputmode="decimal" placeholder="ej: 25">
+    </div>
+    <button id="btnSave">Guardar</button>
+  </div>
+  <div id="msg"></div>
+  <div class="muted">¿Te equivocaste? Cargá de nuevo la misma fecha con el valor correcto: vale el último.</div>
+</div>
+
+<div class="card">
+  <div class="selrow">
+    <label style="margin:0">Año:</label>
+    <select id="selYear"></select>
+    <button class="btn2" id="btnReload">↻ Actualizar datos</button>
+    <span class="muted" id="status"></span>
+  </div>
+  <div class="chip">Total del año <b id="totYear">–</b> mm</div>
+</div>
+
+<div class="card">
+  <h2>Lluvia por día (mm)</h2>
+  <div class="selrow">
+    <label style="margin:0">Mes:</label>
+    <select id="selMonth"></select>
+  </div>
+  <div class="chartbox"><canvas id="chDia"></canvas></div>
+</div>
+
+<div class="card">
+  <h2>Acumulado mensual (mm)</h2>
+  <div class="chartbox"><canvas id="chMes"></canvas></div>
+</div>
+
+<div class="card">
+  <h2>Acumulado trimestral (mm)</h2>
+  <div class="chartbox"><canvas id="chTrim"></canvas></div>
+</div>
+
+<div class="grid2">
+  <div class="card">
+    <h2>% del año por mes</h2>
+    <div class="chartbox"><canvas id="chTortaMes"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>% del año por trimestre</h2>
+    <div class="chartbox"><canvas id="chTortaTrim"></canvas></div>
+  </div>
+</div>
+</div>
+
+<script>
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+
+// ---- Configuracion (Google Form + planilla publicada) ----
+const FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSdU6GJzxCHErFHKn8QHUdCDo8Dw5Jp60ex1XCdylfzT0qteQA/formResponse';
+const ENTRY_FECHA = '847230433';
+const ENTRY_MM = '2074787504';
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQLdZv3vNTb5i4gxJcRLCD8ReBzVrtJzoPD0c4_9U_bgjE3JtIFjA3Oi5yDUB2xE9-upWuPXEuSpmwB/pub?gid=762645661&single=true&output=csv';
+
+const $ = id => document.getElementById(id);
+const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const fmt = n => (Math.round(n*10)/10).toLocaleString('es-AR');
+let DATOS = {};   // { 'yyyy-mm-dd': mm }
+let charts = {};
+
+// ---- util ----
+function hoyISO(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function parseFecha(s){
+  s = s.trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);          // yyyy-mm-dd
+  if (m) return m[1] + '-' + m[2].padStart(2,'0') + '-' + m[3].padStart(2,'0');
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);          // dd/mm/yyyy
+  if (m){ let y = +m[3]; if (y < 100) y += 2000; return y + '-' + m[2].padStart(2,'0') + '-' + m[1].padStart(2,'0'); }
+  return null;
+}
+function parseCSV(text){
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++){
+    const c = text[i];
+    if (q){ if (c === '"'){ if (text[i+1] === '"'){ cell += '"'; i++; } else q = false; } else cell += c; }
+    else if (c === '"') q = true;
+    else if (c === ','){ row.push(cell); cell = ''; }
+    else if (c === '\n'){ row.push(cell); rows.push(row); row = []; cell = ''; }
+    else if (c !== '\r') cell += c;
+  }
+  if (cell !== '' || row.length){ row.push(cell); rows.push(row); }
+  return rows;
+}
+function getPend(){ try { return JSON.parse(localStorage.getItem('lluvia_pend')) || {}; } catch(e){ return {}; } }
+function setPend(p){ localStorage.setItem('lluvia_pend', JSON.stringify(p)); }
+
+// ---- carga de datos ----
+async function cargar(){
+  $('status').textContent = 'Cargando…';
+  try {
+    const r = await fetch(CSV_URL + '&t=' + Date.now(), {cache:'no-store'});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const rows = parseCSV(await r.text());
+    // columnas: Marca temporal, Fechas, Milimitreos (en orden de envio; la ultima gana)
+    const map = {};
+    for (let i = 1; i < rows.length; i++){
+      const f = parseFecha(rows[i][1] || '');
+      const v = parseFloat(String(rows[i][2] || '').replace(',', '.'));
+      if (f && isFinite(v)) map[f] = v;
+    }
+    // pendientes locales aun no reflejados en la planilla
+    const pend = getPend();
+    for (const f in pend){
+      if (map[f] === pend[f].mm) delete pend[f];
+      else if (Date.now() - pend[f].ts < 3600e3) map[f] = pend[f].mm;
+      else delete pend[f];
+    }
+    setPend(pend);
+    DATOS = map;
+    localStorage.setItem('lluvia_cache', JSON.stringify(map));
+    $('status').textContent = Object.keys(map).length + ' días registrados';
+  } catch(e) {
+    try { DATOS = JSON.parse(localStorage.getItem('lluvia_cache')) || {}; } catch(_) { DATOS = {}; }
+    $('status').textContent = 'Sin conexión: mostrando datos guardados';
+  }
+  armarSelectores();
+  dibujar();
+}
+
+// ---- envio ----
+$('btnSave').onclick = async () => {
+  const f = $('inFecha').value;
+  const mm = parseFloat(($('inMm').value || '').replace(',', '.'));
+  const msg = $('msg');
+  if (!f){ msg.className = 'err'; msg.textContent = 'Elegí la fecha.'; return; }
+  if (!isFinite(mm) || mm < 0){ msg.className = 'err'; msg.textContent = 'Poné los milímetros (solo número).'; return; }
+  $('btnSave').disabled = true;
+  msg.className = ''; msg.textContent = 'Guardando…';
+  const [y, mo, d] = f.split('-');
+  const body = new URLSearchParams();
+  body.append('entry.' + ENTRY_FECHA + '_year', y);
+  body.append('entry.' + ENTRY_FECHA + '_month', String(+mo));
+  body.append('entry.' + ENTRY_FECHA + '_day', String(+d));
+  body.append('entry.' + ENTRY_MM, String(mm));
+  try {
+    await fetch(FORM_URL, { method:'POST', mode:'no-cors', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: body.toString() });
+    const pend = getPend(); pend[f] = { mm, ts: Date.now() }; setPend(pend);
+    DATOS[f] = mm;
+    msg.className = 'ok'; msg.textContent = '✔ Guardado: ' + d + '/' + mo + ' → ' + fmt(mm) + ' mm';
+    $('inMm').value = '';
+    armarSelectores(); dibujar();
+  } catch(e) {
+    msg.className = 'err'; msg.textContent = 'No se pudo guardar. Revisá la conexión e intentá de nuevo.';
+  }
+  $('btnSave').disabled = false;
+};
+
+$('btnReload').onclick = cargar;
+
+// ---- selectores ----
+function armarSelectores(){
+  const years = [...new Set(Object.keys(DATOS).map(f => f.slice(0,4)))].sort();
+  const nowY = String(new Date().getFullYear());
+  if (!years.includes(nowY)) years.push(nowY);
+  const selY = $('selYear'), prevY = selY.value;
+  selY.innerHTML = years.map(y => '<option' + (y === (prevY || nowY) ? ' selected' : '') + '>' + y + '</option>').join('');
+  selY.onchange = dibujar;
+  const selM = $('selMonth'), prevM = selM.value;
+  const nowM = String(new Date().getMonth());
+  selM.innerHTML = MESES.map((m, i) => '<option value="' + i + '"' + (String(i) === (prevM || nowM) ? ' selected' : '') + '>' + m + '</option>').join('');
+  selM.onchange = dibujar;
+}
+
+// ---- graficos ----
+function mk(id, cfg){ if (charts[id]) charts[id].destroy(); charts[id] = new Chart($(id), cfg); }
+const AZUL = '#2874a6', CELES = ['#2874a6','#5dade2','#aed6f1','#1a5276','#7fb3d5','#d4e6f1','#154360','#a9cce3','#3498db','#85c1e9','#21618c','#6bb9f0'];
+
+function dibujar(){
+  const year = $('selYear').value || String(new Date().getFullYear());
+  const mes = +($('selMonth').value || new Date().getMonth());
+
+  // dia a dia del mes elegido
+  const nd = new Date(+year, mes+1, 0).getDate();
+  const dias = Array.from({length:nd}, (_, i) => i+1);
+  const serieDia = dias.map(d => DATOS[year + '-' + String(mes+1).padStart(2,'0') + '-' + String(d).padStart(2,'0')] ?? 0);
+  mk('chDia', { type:'bar',
+    data:{ labels:dias, datasets:[{ data:serieDia, backgroundColor:AZUL, borderRadius:3 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false},
+      tooltip:{ callbacks:{ title: c => c[0].label + ' de ' + MESES[mes], label: c => fmt(c.parsed.y) + ' mm' } } },
+      scales:{ y:{ beginAtZero:true, ticks:{ callback:v => v + ' mm' } } } } });
+
+  // acumulados del año
+  const porMes = Array(12).fill(0);
+  for (const f in DATOS) if (f.startsWith(year + '-')) porMes[+f.slice(5,7)-1] += DATOS[f];
+  const porTrim = [0,1,2,3].map(t => porMes[t*3] + porMes[t*3+1] + porMes[t*3+2]);
+  const totalY = porMes.reduce((a,b) => a+b, 0);
+  $('totYear').textContent = fmt(totalY);
+
+  mk('chMes', { type:'bar',
+    data:{ labels:MESES, datasets:[{ data:porMes, backgroundColor:AZUL, borderRadius:4 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false},
+      tooltip:{ callbacks:{ label: c => fmt(c.parsed.y) + ' mm' } } },
+      scales:{ y:{ beginAtZero:true, ticks:{ callback:v => v + ' mm' } } } } });
+
+  mk('chTrim', { type:'bar',
+    data:{ labels:['1er trim. (E-F-M)','2do trim. (A-M-J)','3er trim. (J-A-S)','4to trim. (O-N-D)'],
+      datasets:[{ data:porTrim, backgroundColor:['#1a5276','#2874a6','#5dade2','#aed6f1'], borderRadius:4 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false},
+      tooltip:{ callbacks:{ label: c => fmt(c.parsed.y) + ' mm' } } },
+      scales:{ y:{ beginAtZero:true, ticks:{ callback:v => v + ' mm' } } } } });
+
+  const pctLabel = c => {
+    const tot = c.dataset.data.reduce((a,b) => a+b, 0);
+    return c.label + ': ' + fmt(c.parsed) + ' mm (' + (tot ? Math.round(c.parsed/tot*1000)/10 : 0) + '%)';
+  };
+  const mesesConLluvia = MESES.map((m,i) => ({m, v:porMes[i]})).filter(x => x.v > 0);
+  mk('chTortaMes', { type:'pie',
+    data:{ labels:mesesConLluvia.map(x => x.m), datasets:[{ data:mesesConLluvia.map(x => x.v), backgroundColor:CELES }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom' }, tooltip:{ callbacks:{ label: pctLabel } } } } });
+
+  const trimLabels = ['1er trim.','2do trim.','3er trim.','4to trim.'].filter((_,i) => porTrim[i] > 0);
+  mk('chTortaTrim', { type:'pie',
+    data:{ labels:trimLabels, datasets:[{ data:porTrim.filter(v => v > 0), backgroundColor:['#1a5276','#2874a6','#5dade2','#aed6f1'] }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom' }, tooltip:{ callbacks:{ label: pctLabel } } } } });
+}
+
+$('inFecha').value = hoyISO();
+cargar();
+</script>
+</body>
+</html>
