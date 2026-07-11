@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1b7f3a">
+<title>Movimientos de Hacienda</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; padding:12px; font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif; background:#f0f7f1; color:#173a24; }
+  .wrap { max-width:940px; margin:0 auto; }
+  h1 { font-size:19px; margin:0 0 10px; }
+  .card { background:#fff; border:1px solid #cfe3d4; border-radius:12px; padding:14px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+  .card h2 { font-size:15px; margin:0 0 10px; }
+  label { font-size:13px; font-weight:600; display:block; margin-bottom:4px; }
+  input, select { font-size:17px; padding:10px; border:1px solid #a8c8b2; border-radius:10px; background:#fff; color:inherit; width:100%; }
+  button { font-size:17px; font-weight:600; padding:12px 22px; border:0; border-radius:10px; background:#1b7f3a; color:#fff; cursor:pointer; width:100%; }
+  button:disabled { opacity:.5; }
+  .btn2 { background:#eaf4ec; color:#1b7f3a; border:1px solid #a8c8b2; font-size:13px; padding:6px 12px; width:auto; }
+  .g2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .g3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  @media (max-width:600px){ .g3 { grid-template-columns:1fr 1fr; } }
+  .fld { margin-bottom:10px; }
+  #msg { font-size:14px; margin-top:10px; min-height:18px; }
+  .ok { color:#1b7f3a; } .err { color:#b3261e; }
+  .muted { font-size:12px; color:#5c7565; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { text-align:right; font-size:12px; color:#5c7565; padding:5px 6px; border-bottom:1px solid #cfe3d4; }
+  th:first-child, td:first-child { text-align:left; }
+  td { text-align:right; padding:5px 6px; border-bottom:1px solid #e7f1e9; }
+  tr.tot td { font-weight:700; border-top:2px solid #1b7f3a; }
+  .pos { color:#1b7f3a; } .neg { color:#b3261e; }
+  .chip { background:#eaf4ec; border-radius:10px; padding:8px 14px; display:inline-block; margin:0 6px 6px 0; }
+  .chip .v { font-size:20px; font-weight:700; display:block; }
+  .chip .l { font-size:11px; color:#5c7565; }
+  .selrow { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+  .selrow select { width:auto; font-size:14px; padding:6px 10px; }
+  .chartbox { position:relative; height:260px; }
+  details summary { cursor:pointer; font-weight:600; font-size:14px; color:#1b7f3a; }
+  .cfg td input { font-size:14px; padding:4px 6px; width:70px; text-align:right; }
+  #destBox { display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>&#128004; Movimientos de Hacienda</h1>
+
+<div class="card">
+  <h2>Cargar movimiento</h2>
+  <div class="g2">
+    <div class="fld"><label>Fecha</label><input type="date" id="inFecha"></div>
+    <div class="fld"><label>Campo</label><select id="inCampo"></select></div>
+  </div>
+  <div class="fld"><label>Movimiento</label><select id="inMov"></select></div>
+  <div class="g2">
+    <div class="fld"><label id="lblCat">Categoría</label><select id="inCat"></select></div>
+    <div class="fld" id="destBox"><label style="color:#1b7f3a">Pasa a (destino)</label><select id="inDest"></select></div>
+  </div>
+  <div class="g2">
+    <div class="fld"><label>Cantidad</label><input type="text" id="inCant" inputmode="numeric" placeholder="ej: 12"></div>
+    <div class="fld"><label>Peso promedio kg <span class="muted">(opcional)</span></label><input type="text" id="inPeso" inputmode="decimal" placeholder="ej: 180"></div>
+  </div>
+  <div class="fld"><label>Observaciones <span class="muted">(opcional)</span></label><input type="text" id="inObs"></div>
+  <button id="btnSave">Guardar movimiento</button>
+  <div id="msg"></div>
+</div>
+
+<div class="card">
+  <div class="selrow">
+    <label style="margin:0">Ejercicio:</label><select id="selEj"></select>
+    <label style="margin:0">Campo:</label><select id="selCampo"><option value="">Todos</option></select>
+    <button class="btn2" id="btnReload">&#8635; Actualizar datos</button>
+    <span class="muted" id="status"></span>
+  </div>
+  <div>
+    <span class="chip"><span class="v" id="kStock">–</span><span class="l">cabezas hoy</span></span>
+    <span class="chip"><span class="v" id="kKg">–</span><span class="l">kg producidos</span></span>
+    <span class="chip"><span class="v" id="kEV">–</span><span class="l">stock promedio (EV)</span></span>
+    <span class="chip"><span class="v" id="kKgEV">–</span><span class="l">kg / EV</span></span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Stock por categoría</h2>
+  <div style="overflow-x:auto"><table id="tblStock"></table></div>
+  <div class="muted" style="margin-top:6px">Inicial = stock inicial cargado del ejercicio · Nac = nacimientos · Comp = compras · Cambio = entradas − salidas por recategorización · Vta = ventas · Mte = muertes</div>
+</div>
+
+<div class="card">
+  <h2>Producción de carne (fórmula del ejercicio)</h2>
+  <div style="overflow-x:auto"><table id="tblProd"></table></div>
+  <div class="muted" style="margin-top:6px" id="prodNota"></div>
+</div>
+
+<div class="card">
+  <h2>Evolución del stock (cabezas por mes)</h2>
+  <div class="chartbox"><canvas id="chEvo"></canvas></div>
+</div>
+
+<div class="card">
+  <h2>Movimientos del mes</h2>
+  <div class="selrow"><label style="margin:0">Mes:</label><select id="selMes"></select></div>
+  <div style="overflow-x:auto"><table id="tblMovs"></table></div>
+</div>
+
+<div class="card">
+  <details>
+    <summary>&#9881; Pesos y parámetros (tocá para ajustar)</summary>
+    <div style="overflow-x:auto;margin-top:10px"><table class="cfg" id="tblCfg"></table></div>
+    <div class="g3" style="margin-top:10px">
+      <div class="fld"><label>Peso al nacer (kg)</label><input type="text" id="cfgNacer" inputmode="decimal"></div>
+      <div class="fld"><label>Ganancia diaria ternero (kg/día)</label><input type="text" id="cfgGdp" inputmode="decimal"></div>
+      <div class="fld" style="display:flex;align-items:end"><button class="btn2" id="btnCfgSave" style="width:100%">Guardar parámetros</button></div>
+    </div>
+    <div class="muted">El ternero nacido gana peso por día desde su fecha de nacimiento. Los terneros del stock inicial usan el peso de la tabla.</div>
+  </details>
+</div>
+</div>
+
+<script>
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+
+const FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLServ8ZHmBt3UMQkUOLjfsA3x7Ulh2jnZZOxZgcarNHD_981xQ/formResponse';
+const E_FECHA='2026734842', E_CAMPO='383353529', E_CAT='1953149009', E_MOV='1104545136',
+      E_CANT='1310013726', E_PESO='687909587', E_DEST='790172952', E_OBS='1703103493';
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSaXFGJqdARXu-wZudPQeKQnC-9-AION_evO8Z7kzZp8arM6INy3wlMv1VNS8p4LIYePaP_7R8ZI0gj/pub?gid=400330284&single=true&output=csv';
+
+const CAMPOS = ['San Antonio','Santa María','La Esperanza'];
+const CATS = ['vaca','Vaca Seca','Vaca CUT','vaq. 1 serv.','vaq. 2 serv.','Recría H.','ternero/a','Recría M','Toro'];
+const MOVS = ['Nacimiento','Compra','Cambio de categoría','Venta','Muerte','Stock inicial'];
+const DEF = {
+  pesoExi:  {'vaca':400,'Vaca Seca':400,'Vaca CUT':400,'vaq. 1 serv.':260,'vaq. 2 serv.':350,'Recría H.':260,'ternero/a':180,'Recría M':240,'Toro':650},
+  pesoVta:  {'vaca':400,'Vaca Seca':400,'Vaca CUT':400,'vaq. 1 serv.':320,'vaq. 2 serv.':350,'Recría H.':260,'ternero/a':180,'Recría M':260,'Toro':650},
+  cv:       {'vaca':1,'Vaca Seca':1,'Vaca CUT':1,'vaq. 1 serv.':0.9,'vaq. 2 serv.':0.9,'Recría H.':0.4,'ternero/a':0.3,'Recría M':0.4,'Toro':1.4},
+  nacer:35, gdp:0.65
+};
+let CFG = JSON.parse(localStorage.getItem('hac_cfg') || 'null') || JSON.parse(JSON.stringify(DEF));
+
+const $ = id => document.getElementById(id);
+const fmt = n => Math.round(n).toLocaleString('es-AR');
+const fmt1 = n => (Math.round(n*10)/10).toLocaleString('es-AR');
+let FILAS = [];
+let charts = {};
+
+function norm(s){
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[.\/]/g,' ').replace(/\s+/g,' ').trim();
+}
+const CAT_ALIAS = {};
+CATS.forEach(c => CAT_ALIAS[norm(c)] = c);
+CAT_ALIAS['ternero'] = 'ternero/a'; CAT_ALIAS['ternera'] = 'ternero/a'; CAT_ALIAS['terneros'] = 'ternero/a';
+CAT_ALIAS['recria h'] = 'Recría H.'; CAT_ALIAS['recria m'] = 'Recría M'; CAT_ALIAS['recria'] = 'Recría M';
+CAT_ALIAS['vaq 1 serv'] = 'vaq. 1 serv.'; CAT_ALIAS['vaq 2 serv'] = 'vaq. 2 serv.';
+CAT_ALIAS['vaquillona 1 servicio'] = 'vaq. 1 serv.'; CAT_ALIAS['vaquillona 2 servicio'] = 'vaq. 2 serv.';
+CAT_ALIAS['toros'] = 'Toro'; CAT_ALIAS['vacas'] = 'vaca';
+const MOV_ALIAS = {'nacimiento':'Nacimiento','nacimientos':'Nacimiento','compra':'Compra','compras':'Compra',
+  'cambio de categoria':'Cambio de categoría','cambio de categoria entrada':'Cambio de categoría',
+  'venta':'Venta','ventas':'Venta','muerte':'Muerte','muertes':'Muerte','mortandad':'Muerte',
+  'stock inicial':'Stock inicial'};
+const CAMPO_ALIAS = {'san antonio':'San Antonio','santa maria':'Santa María','la esperanza':'La Esperanza'};
+
+function parseFecha(s){
+  s = String(s||'').trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if (m){ let y=+m[3]; if (y<100) y+=2000; return y+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0'); }
+  return null;
+}
+function parseCSV(text){
+  const rows=[]; let row=[], cell='', q=false;
+  for (let i=0;i<text.length;i++){ const c=text[i];
+    if (q){ if (c==='"'){ if (text[i+1]==='"'){ cell+='"'; i++; } else q=false; } else cell+=c; }
+    else if (c==='"') q=true;
+    else if (c===','){ row.push(cell); cell=''; }
+    else if (c==='\n'){ row.push(cell); rows.push(row); row=[]; cell=''; }
+    else if (c!=='\r') cell+=c;
+  }
+  if (cell!=='' || row.length){ row.push(cell); rows.push(row); }
+  return rows;
+}
+function hoyISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function ejercicioDe(f){ const y=+f.slice(0,4); return +f.slice(5,7) >= 7 ? y : y-1; }
+function getPend(){ try { return JSON.parse(localStorage.getItem('hac_pend'))||[]; } catch(e){ return []; } }
+function setPend(p){ localStorage.setItem('hac_pend', JSON.stringify(p)); }
+
+async function cargar(){
+  $('status').textContent = 'Cargando…';
+  try {
+    const r = await fetch(CSV_URL + '&t=' + Date.now(), {cache:'no-store'});
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    const rows = parseCSV(await r.text());
+    const out = [];
+    for (let i=1;i<rows.length;i++){
+      const f = parseFecha(rows[i][1]);
+      const campo = CAMPO_ALIAS[norm(rows[i][2])];
+      const cat = CAT_ALIAS[norm(rows[i][3])];
+      const mov = MOV_ALIAS[norm(rows[i][4])];
+      const cant = parseFloat(String(rows[i][5]||'').replace(',','.'));
+      const peso = parseFloat(String(rows[i][6]||'').replace(',','.'));
+      const dest = CAT_ALIAS[norm(rows[i][7])] || null;
+      if (f && campo && cat && mov && isFinite(cant) && cant>0)
+        out.push({f, campo, cat, mov, cant, peso: isFinite(peso)&&peso>0?peso:null, dest, obs:rows[i][8]||'', ts:rows[i][0]||''});
+    }
+    const pend = getPend().filter(p => Date.now()-p.ts < 3600e3);
+    const claves = new Set(out.map(r => r.f+'|'+r.campo+'|'+r.cat+'|'+r.mov+'|'+r.cant));
+    pend.forEach(p => { if (!claves.has(p.k)) out.push(p.fila); });
+    setPend(pend.filter(p => !claves.has(p.k)));
+    FILAS = out.sort((a,b)=> a.f<b.f?-1:1);
+    localStorage.setItem('hac_cache', JSON.stringify(FILAS));
+    $('status').textContent = FILAS.length + ' movimientos';
+  } catch(e){
+    try { FILAS = JSON.parse(localStorage.getItem('hac_cache'))||[]; } catch(_){ FILAS = []; }
+    $('status').textContent = 'Sin conexión: datos guardados';
+  }
+  armarSelectores(); dibujar();
+}
+
+$('btnSave').onclick = async () => {
+  const f=$('inFecha').value, campo=$('inCampo').value, mov=$('inMov').value,
+        cat=$('inCat').value, dest=$('inDest').value, obs=$('inObs').value;
+  const cant = parseFloat(($('inCant').value||'').replace(',','.'));
+  const peso = parseFloat(($('inPeso').value||'').replace(',','.'));
+  const msg=$('msg');
+  if (!f){ msg.className='err'; msg.textContent='Elegí la fecha.'; return; }
+  if (!isFinite(cant)||cant<=0){ msg.className='err'; msg.textContent='Poné la cantidad (solo número).'; return; }
+  if (mov==='Cambio de categoría' && (!dest || dest===cat)){ msg.className='err'; msg.textContent='Elegí a qué categoría pasa (distinta de la de origen).'; return; }
+  $('btnSave').disabled = true; msg.className=''; msg.textContent='Guardando…';
+  const [y,mo,d] = f.split('-');
+  const body = new URLSearchParams();
+  body.append('entry.'+E_FECHA+'_year', y);
+  body.append('entry.'+E_FECHA+'_month', String(+mo));
+  body.append('entry.'+E_FECHA+'_day', String(+d));
+  body.append('entry.'+E_CAMPO, campo);
+  body.append('entry.'+E_CAT, cat);
+  body.append('entry.'+E_MOV, mov);
+  body.append('entry.'+E_CANT, String(cant));
+  if (isFinite(peso)&&peso>0) body.append('entry.'+E_PESO, String(peso));
+  if (mov==='Cambio de categoría') body.append('entry.'+E_DEST, dest);
+  if (obs) body.append('entry.'+E_OBS, obs);
+  try {
+    await fetch(FORM_URL, {method:'POST', mode:'no-cors', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: body.toString()});
+    const fila = {f, campo, cat, mov, cant, peso: isFinite(peso)&&peso>0?peso:null, dest: mov==='Cambio de categoría'?dest:null, obs};
+    const pend = getPend(); pend.push({k: f+'|'+campo+'|'+cat+'|'+mov+'|'+cant, ts: Date.now(), fila}); setPend(pend);
+    FILAS.push(fila); FILAS.sort((a,b)=> a.f<b.f?-1:1);
+    msg.className='ok';
+    msg.textContent = '✔ Guardado: ' + cant + ' ' + cat + ' — ' + mov + (mov==='Cambio de categoría' ? ' → '+dest : '') + ' (' + campo + ')';
+    $('inCant').value=''; $('inPeso').value=''; $('inObs').value='';
+    armarSelectores(); dibujar();
+  } catch(e){ msg.className='err'; msg.textContent='No se pudo guardar. Revisá la señal e intentá de nuevo.'; }
+  $('btnSave').disabled = false;
+};
+$('btnReload').onclick = cargar;
+
+function movsFiltrados(ej, campo, hasta){
+  return FILAS.filter(r => ejercicioDe(r.f)===ej && (!campo || r.campo===campo) && (!hasta || r.f<=hasta));
+}
+function calcStock(ej, campo, hasta){
+  const st = {}; CATS.forEach(c => st[c] = {ini:0,nac:0,com:0,cin:0,cout:0,vta:0,mte:0});
+  const nacLotes = [];
+  const vtas = [], coms = [];
+  movsFiltrados(ej, campo, hasta).forEach(r => {
+    const s = st[r.cat]; if (!s) return;
+    if (r.mov==='Stock inicial') s.ini += r.cant;
+    else if (r.mov==='Nacimiento'){ s.nac += r.cant; nacLotes.push({f:r.f, cant:r.cant, peso:r.peso}); }
+    else if (r.mov==='Compra'){ s.com += r.cant; coms.push(r); }
+    else if (r.mov==='Venta'){ s.vta += r.cant; vtas.push(r); }
+    else if (r.mov==='Muerte') s.mte += r.cant;
+    else if (r.mov==='Cambio de categoría'){ s.cout += r.cant; if (st[r.dest]) st[r.dest].cin += r.cant; }
+  });
+  CATS.forEach(c => { const s=st[c]; s.hoy = s.ini+s.nac+s.com+s.cin-s.cout-s.vta-s.mte; });
+  return {st, nacLotes, vtas, coms};
+}
+function pesoTernero(fnac, hasta){
+  const d1=new Date(fnac), d2=new Date(hasta);
+  const dias = Math.max(0, Math.round((d2-d1)/864e5));
+  return (+CFG.nacer) + dias * (+CFG.gdp);
+}
+function kgExistencia(st, nacLotes, hasta){
+  let kg=0;
+  CATS.forEach(c => { if (c!=='ternero/a') kg += st[c].hoy * (+CFG.pesoExi[c]); });
+  const t = st['ternero/a'];
+  let restantes = t.hoy;
+  let nacVivos = Math.max(0, Math.min(restantes, t.nac - t.vta - t.mte - t.cout + 0));
+  const deIni = Math.max(0, restantes - nacVivos);
+  kg += deIni * (+CFG.pesoExi['ternero/a']);
+  if (nacVivos > 0 && nacLotes.length){
+    const totNac = nacLotes.reduce((a,l)=>a+l.cant,0) || 1;
+    nacLotes.forEach(l => { kg += (l.cant/totNac) * nacVivos * pesoTernero(l.f, hasta); });
+  }
+  return kg;
+}
+function calcProd(ej, campo){
+  const hoy = hoyISO();
+  const fin = calcStock(ej, campo, hoy);
+  const st = fin.st;
+  const iniKg = CATS.reduce((a,c)=> a + st[c].ini * (+CFG.pesoExi[c]), 0);
+  const finKg = kgExistencia(st, fin.nacLotes, hoy);
+  let vtaKg=0; fin.vtas.forEach(r => vtaKg += r.cant * (r.peso || +CFG.pesoVta[r.cat]));
+  let comKg=0; fin.coms.forEach(r => comKg += r.cant * (r.peso || +CFG.pesoVta[r.cat]));
+  const prod = finKg - iniKg + vtaKg - comKg;
+  const evIni = CATS.reduce((a,c)=> a + st[c].ini * (+CFG.cv[c]), 0);
+  const evHoy = CATS.reduce((a,c)=> a + st[c].hoy * (+CFG.cv[c]), 0);
+  return {st, iniKg, finKg, vtaKg, comKg, prod, evIni, evHoy, evProm:(evIni+evHoy)/2};
+}
+
+function armarSelectores(){
+  const ejs = [...new Set(FILAS.map(r => ejercicioDe(r.f)))].sort();
+  const ejAct = ejercicioDe(hoyISO());
+  if (!ejs.includes(ejAct)) ejs.push(ejAct);
+  const sel = $('selEj'), prev = sel.value;
+  sel.innerHTML = ejs.map(e => '<option value="'+e+'"'+(String(e)===(prev||String(ejAct))?' selected':'')+'>'+e+'/'+(e+1)+'</option>').join('');
+  sel.onchange = dibujar; $('selCampo').onchange = dibujar;
+  const sm = $('selMes'), prevM = sm.value;
+  const meses = [...new Set(FILAS.map(r => r.f.slice(0,7)))].sort().reverse();
+  sm.innerHTML = meses.map(m => '<option'+(m===prevM?' selected':'')+'>'+m+'</option>').join('');
+  sm.onchange = dibujar;
+}
+function mk(id,cfg){ if (charts[id]) charts[id].destroy(); charts[id]=new Chart($(id),cfg); }
+
+function dibujar(){
+  const ej = +($('selEj').value || ejercicioDe(hoyISO()));
+  const campo = $('selCampo').value;
+  const p = calcProd(ej, campo);
+  const st = p.st;
+  const totHoy = CATS.reduce((a,c)=>a+st[c].hoy,0);
+  $('kStock').textContent = fmt(totHoy);
+  $('kKg').textContent = fmt(p.prod);
+  $('kEV').textContent = fmt1(p.evProm);
+  $('kKgEV').textContent = p.evProm>0 ? fmt1(p.prod/p.evProm) : '–';
+
+  let h = '<tr><th>Categoría</th><th>Inicial</th><th>Nac</th><th>Comp</th><th>Cambio</th><th>Vta</th><th>Mte</th><th>Hoy</th></tr>';
+  CATS.forEach(c => { const s=st[c];
+    if (!s.ini&&!s.nac&&!s.com&&!s.cin&&!s.cout&&!s.vta&&!s.mte) return;
+    const cam = s.cin - s.cout;
+    h += '<tr><td>'+c+'</td><td>'+fmt(s.ini)+'</td><td>'+(s.nac?fmt(s.nac):'')+'</td><td>'+(s.com?fmt(s.com):'')+'</td>'
+      + '<td class="'+(cam>0?'pos':cam<0?'neg':'')+'">'+(cam? (cam>0?'+':'')+fmt(cam):'')+'</td>'
+      + '<td>'+(s.vta?fmt(s.vta):'')+'</td><td>'+(s.mte?fmt(s.mte):'')+'</td><td><b>'+fmt(s.hoy)+'</b></td></tr>';
+  });
+  const T = k => CATS.reduce((a,c)=>a+st[c][k],0);
+  h += '<tr class="tot"><td>TOTAL</td><td>'+fmt(T('ini'))+'</td><td>'+fmt(T('nac'))+'</td><td>'+fmt(T('com'))+'</td><td></td><td>'+fmt(T('vta'))+'</td><td>'+fmt(T('mte'))+'</td><td>'+fmt(totHoy)+'</td></tr>';
+  $('tblStock').innerHTML = h;
+
+  $('tblProd').innerHTML =
+    '<tr><td>Kg existencia hoy (cabezas × peso)</td><td>'+fmt(p.finKg)+'</td></tr>' +
+    '<tr><td>− Kg existencia inicial</td><td>− '+fmt(p.iniKg)+'</td></tr>' +
+    '<tr><td>+ Kg vendidos</td><td>+ '+fmt(p.vtaKg)+'</td></tr>' +
+    '<tr><td>− Kg comprados</td><td>− '+fmt(p.comKg)+'</td></tr>' +
+    '<tr class="tot"><td>Producción de carne del ejercicio</td><td>'+fmt(p.prod)+' kg</td></tr>';
+  $('prodNota').textContent = 'Terneros nacidos: '+CFG.nacer+' kg al nacer + '+CFG.gdp+' kg/día hasta hoy. EV inicial '+fmt1(p.evIni)+' · EV hoy '+fmt1(p.evHoy)+'.';
+
+  const meses=[]; const d0=new Date(ej,6,1), hoy=new Date();
+  for (let d=new Date(d0); d<=hoy && meses.length<12; d.setMonth(d.getMonth()+1))
+    meses.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
+  const serie = meses.map(m => {
+    const ult = m + '-31';
+    const s2 = calcStock(ej, campo, ult).st;
+    return CATS.reduce((a,c)=>a+s2[c].hoy,0);
+  });
+  mk('chEvo', {type:'bar', data:{labels:meses, datasets:[{data:serie, backgroundColor:'#1b7f3a', borderRadius:4}]},
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:true, title:{display:true,text:'cabezas'}}}}});
+
+  const mesSel = $('selMes').value;
+  let hm = '<tr><th>Fecha</th><th>Campo</th><th>Movimiento</th><th>Categoría</th><th>Cant</th><th>Peso</th><th>Obs</th></tr>';
+  FILAS.filter(r => r.f.slice(0,7)===mesSel).sort((a,b)=> a.f<b.f?1:-1).forEach(r => {
+    hm += '<tr><td>'+r.f.slice(8)+'/'+r.f.slice(5,7)+'</td><td>'+r.campo+'</td><td>'+r.mov+(r.dest?' → '+r.dest:'')+'</td><td>'+r.cat+'</td><td>'+fmt(r.cant)+'</td><td>'+(r.peso?fmt(r.peso):'')+'</td><td style="text-align:left">'+(r.obs||'')+'</td></tr>';
+  });
+  $('tblMovs').innerHTML = hm;
+  armarCfg();
+}
+
+function armarCfg(){
+  let h = '<tr><th>Categoría</th><th>Peso exist.</th><th>Peso vta/comp</th><th>Equiv. vaca</th></tr>';
+  CATS.forEach(c => {
+    h += '<tr><td>'+c+'</td><td><input data-t="pesoExi" data-c="'+c+'" value="'+CFG.pesoExi[c]+'"></td>'
+      + '<td><input data-t="pesoVta" data-c="'+c+'" value="'+CFG.pesoVta[c]+'"></td>'
+      + '<td><input data-t="cv" data-c="'+c+'" value="'+CFG.cv[c]+'"></td></tr>';
+  });
+  $('tblCfg').innerHTML = h;
+  $('cfgNacer').value = CFG.nacer; $('cfgGdp').value = CFG.gdp;
+}
+$('btnCfgSave').onclick = () => {
+  document.querySelectorAll('#tblCfg input').forEach(i => {
+    const v = parseFloat(String(i.value).replace(',','.'));
+    if (isFinite(v) && v>=0) CFG[i.dataset.t][i.dataset.c] = v;
+  });
+  const n = parseFloat(String($('cfgNacer').value).replace(',','.'));
+  const g = parseFloat(String($('cfgGdp').value).replace(',','.'));
+  if (isFinite(n)&&n>0) CFG.nacer = n;
+  if (isFinite(g)&&g>=0) CFG.gdp = g;
+  localStorage.setItem('hac_cfg', JSON.stringify(CFG));
+  dibujar();
+};
+
+function iniciar(){
+  $('inFecha').value = hoyISO();
+  $('inCampo').innerHTML = CAMPOS.map(c=>'<option>'+c+'</option>').join('');
+  $('inMov').innerHTML = MOVS.map(m=>'<option>'+m+'</option>').join('');
+  $('inCat').innerHTML = CATS.map(c=>'<option>'+c+'</option>').join('');
+  $('inDest').innerHTML = CATS.map(c=>'<option>'+c+'</option>').join('');
+  $('inMov').onchange = () => {
+    const es = $('inMov').value==='Cambio de categoría';
+    $('destBox').style.display = es?'block':'none';
+    $('lblCat').textContent = es ? 'Categoría (de dónde sale)' : 'Categoría';
+  };
+  try { FILAS = JSON.parse(localStorage.getItem('hac_cache'))||[]; } catch(e){}
+  armarSelectores(); dibujar(); cargar();
+}
+iniciar();
+</script>
+</body>
+</html>
