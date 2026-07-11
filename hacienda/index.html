@@ -162,6 +162,38 @@ const MOV_ALIAS = {'nacimiento':'Nacimiento','nacimientos':'Nacimiento','compra'
   'venta':'Venta','ventas':'Venta','muerte':'Muerte','muertes':'Muerte','mortandad':'Muerte',
   'stock inicial':'Stock inicial'};
 const CAMPO_ALIAS = {'san antonio':'San Antonio','santa maria':'Santa María','la esperanza':'La Esperanza'};
+function matchCat(s){
+  const n = norm(s);
+  if (!n) return null;
+  if (CAT_ALIAS[n]) return CAT_ALIAS[n];
+  if (n.includes('ternero') || n.includes('ternera')) return 'ternero/a';
+  if (n.includes('recria')) return n.includes('h') ? 'Recría H.' : 'Recría M';
+  if (n.includes('vaq')) return n.includes('2') ? 'vaq. 2 serv.' : 'vaq. 1 serv.';
+  if (n.includes('cut')) return 'Vaca CUT';
+  if (n.includes('seca')) return 'Vaca Seca';
+  if (n.includes('toro')) return 'Toro';
+  if (n.includes('vaca')) return 'vaca';
+  return null;
+}
+function matchMov(s){
+  const n = norm(s);
+  if (!n) return null;
+  if (n.startsWith('cambio')) return 'Cambio de categoría';
+  if (n.startsWith('venta')) return 'Venta';
+  if (n.startsWith('nacim')) return 'Nacimiento';
+  if (n.startsWith('compr')) return 'Compra';
+  if (n.startsWith('muert') || n.startsWith('mortan')) return 'Muerte';
+  if (n.startsWith('stock') || n.startsWith('existencia') || n.startsWith('ex ini')) return 'Stock inicial';
+  return null;
+}
+function matchCampo(s){
+  const n = norm(s);
+  if (CAMPO_ALIAS[n]) return CAMPO_ALIAS[n];
+  if (n.includes('antonio')) return 'San Antonio';
+  if (n.includes('maria')) return 'Santa María';
+  if (n.includes('esperanza')) return 'La Esperanza';
+  return null;
+}
 
 function parseFecha(s){
   s = String(s||'').trim();
@@ -195,16 +227,18 @@ async function cargar(){
     if (!r.ok) throw new Error('HTTP '+r.status);
     const rows = parseCSV(await r.text());
     const out = [];
+    let ignoradas = 0;
     for (let i=1;i<rows.length;i++){
       const f = parseFecha(rows[i][1]);
-      const campo = CAMPO_ALIAS[norm(rows[i][2])];
-      const cat = CAT_ALIAS[norm(rows[i][3])];
-      const mov = MOV_ALIAS[norm(rows[i][4])];
+      const campo = matchCampo(rows[i][2]);
+      const cat = matchCat(rows[i][3]);
+      const mov = matchMov(rows[i][4]);
       const cant = parseFloat(String(rows[i][5]||'').replace(',','.'));
       const peso = parseFloat(String(rows[i][6]||'').replace(',','.'));
-      const dest = CAT_ALIAS[norm(rows[i][7])] || null;
+      const dest = matchCat(rows[i][7]) || null;
       if (f && campo && cat && mov && isFinite(cant) && cant>0)
         out.push({f, campo, cat, mov, cant, peso: isFinite(peso)&&peso>0?peso:null, dest, obs:rows[i][8]||'', ts:rows[i][0]||''});
+      else if (rows[i].some(x => String(x||'').trim())) ignoradas++;
     }
     const pend = getPend().filter(p => Date.now()-p.ts < 3600e3);
     const claves = new Set(out.map(r => r.f+'|'+r.campo+'|'+r.cat+'|'+r.mov+'|'+r.cant));
@@ -212,7 +246,7 @@ async function cargar(){
     setPend(pend.filter(p => !claves.has(p.k)));
     FILAS = out.sort((a,b)=> a.f<b.f?-1:1);
     localStorage.setItem('hac_cache', JSON.stringify(FILAS));
-    $('status').textContent = FILAS.length + ' movimientos';
+    $('status').textContent = FILAS.length + ' movimientos' + (ignoradas ? ' (' + ignoradas + ' filas sin interpretar)' : '');
   } catch(e){
     try { FILAS = JSON.parse(localStorage.getItem('hac_cache'))||[]; } catch(_){ FILAS = []; }
     $('status').textContent = 'Sin conexión: datos guardados';
