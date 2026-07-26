@@ -2,9 +2,10 @@ name: Actualizar precios
 
 on:
   schedule:
-    - cron: '0 20 * * 5'
-    - cron: '0 14 * * 6'
-  workflow_dispatch: {}
+    - cron: '0 20 * * 5'   # viernes 17:00 hora Argentina
+    - cron: '0 14 * * 6'   # sabado 11:00 hora Argentina (reintento)
+    - cron: '0 14 * * 1'   # lunes 11:00 hora Argentina (reintento extra, por si GitHub salteo los anteriores)
+  workflow_dispatch: {}     # permite ejecutarlo a mano desde la pestana Actions
 
 permissions:
   contents: write
