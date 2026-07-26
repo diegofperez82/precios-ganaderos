@@ -2,7 +2,7 @@
 """Actualiza data.json con los precios semanales.
 Fuentes: elrural.com (terneros zona centro + indice novillo arrendamiento)
 y mercadoagroganadero.com.ar (respaldo del indice arrendamiento)."""
-import re, json, sys, datetime
+import re, json, sys, time, datetime
 from bs4 import BeautifulSoup
 
 URLS = {
@@ -12,27 +12,39 @@ URLS = {
     'novillo_idx':   'https://www.elrural.com/historicos/ganadero/indice-novillo-arrendamiento-precios-indicativos/',
     'mag':           'https://www.mercadoagroganadero.com.ar/dll/inicio.dll',
 }
-HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
-           'Accept-Language': 'es-AR,es;q=0.9'}
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'es-AR,es;q=0.9,en;q=0.8',
+    'Cache-Control': 'no-cache',
+}
 CAT_RE = re.compile(r'^(Terneros|Novillitos|Macho|Terneras|Hembras)', re.I)
+INTENTOS = 4
 
 def get(url):
-    """Devuelve el HTML o None. Prueba requests y despues cloudscraper."""
+    """Devuelve el HTML o None. Reintenta con requests y, si sigue fallando, con cloudscraper."""
     import requests
-    try:
-        r = requests.get(url, headers=HEADERS, timeout=30)
-        if r.ok and len(r.text) > 2000 and 'Just a moment' not in r.text:
-            return r.text
-    except Exception:
-        pass
+    for i in range(INTENTOS):
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=30)
+            if r.ok and len(r.text) > 2000 and 'Just a moment' not in r.text and 'Attention Required' not in r.text:
+                return r.text
+        except Exception as e:
+            print('requests intento', i + 1, 'fallo para', url, ':', e)
+        time.sleep(2 + i * 2)
     try:
         import cloudscraper
-        s = cloudscraper.create_scraper()
-        r = s.get(url, timeout=45)
-        if r.ok and len(r.text) > 2000 and 'Just a moment' not in r.text:
-            return r.text
-    except Exception:
-        pass
+        s = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False})
+        for i in range(INTENTOS):
+            try:
+                r = s.get(url, headers=HEADERS, timeout=45)
+                if r.ok and len(r.text) > 2000 and 'Just a moment' not in r.text and 'Attention Required' not in r.text:
+                    return r.text
+            except Exception as e:
+                print('cloudscraper intento', i + 1, 'fallo para', url, ':', e)
+            time.sleep(3 + i * 3)
+    except Exception as e:
+        print('cloudscraper no disponible:', e)
     print('AVISO: no se pudo descargar', url)
     return None
 
@@ -83,11 +95,15 @@ def parse_novillo(html):
             if vm:
                 value = num(vm.group(1))
                 break
+    if value is None:
+        vm = re.search(r'\$?\s*([\d.]+,\d+)\s*(?:</td>|\|)?\s*Fuente', soup.get_text(' '))
+        if vm:
+            value = num(vm.group(1))
     if end and value:
         return end, {'week': wm.group(1) + ' al ' + wm.group(2), 'value': value}
     return None
 
-def index_links(html, title_re, limit=8):
+def index_links(html, title_re, limit=10):
     """Links de los posts mas recientes del archivo historico."""
     soup = BeautifulSoup(html, 'html.parser')
     out = []
@@ -99,7 +115,7 @@ def index_links(html, title_re, limit=8):
     return out[:limit]
 
 def parse_mag(html):
-    """Indice Arrendamiento del sitio del MAG (respaldo)."""
+    """Indice Arrendamiento del sitio del MAG (respaldo cuando elrural falla del todo)."""
     soup = BeautifulSoup(html, 'html.parser')
     text = soup.get_text(' ')
     vm = re.search(r'ndice\s+Arrend\.?\s*\$?\s*([\d.]+,\d+)', text, re.I)
@@ -131,7 +147,7 @@ def main():
                 if r:
                     data['terneros'][r[0]] = r[1]
 
-    # --- Novillo arrendamiento: elrural, con respaldo del MAG ---
+    # --- Novillo arrendamiento: elrural (vivo + historico), con respaldo del MAG ---
     got_novillo = False
     html = get(URLS['novillo_live'])
     if html:
