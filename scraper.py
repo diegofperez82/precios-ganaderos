@@ -15,11 +15,14 @@ URLS = {
     'cebada_live':   'https://www.elrural.com/mercados/granarios/cebada/',
     'girasol_live':  'https://www.elrural.com/mercados/granarios/girasol/',
 }
-# Granos a trackear: (nombre, url, tipo de sub-tabla si aplica -- p.ej. cebada tiene Forrajera/Cervecera)
+# Granos a trackear: (nombre, url, tipo de sub-tabla si aplica, modo de 'futuro')
+# modo 'matba'        -> usa parse_futuro_matba (mercado a termino MATBA Rosario)
+# modo 'forward_port' -> usa parse_forward_port (fila de entrega diferida por puerto,
+#                        que es la que realmente tiene cotizacion para cebada/girasol)
 GRANOS_CFG = [
-    ('trigo', 'trigo_live', None),
-    ('cebada', 'cebada_live', 'Cervecera'),
-    ('girasol', 'girasol_live', None),
+    ('trigo', 'trigo_live', None, 'matba'),
+    ('cebada', 'cebada_live', 'Cervecera', 'forward_port'),
+    ('girasol', 'girasol_live', None, 'forward_port'),
 ]
 PORT_PRIORITY = ['Rosario', 'Quequén', 'Quequen', 'Bahía Blanca', 'Bahia Blanca', 'Ba. Blanca', 'Dársena', 'Darsena', 'Las Palmas']
 HEADERS = {
@@ -175,6 +178,47 @@ def parse_disponible(html, tipo=None):
                             return fecha_iso, {'fecha': fecha, 'plaza': ports[i].strip(), 'value': v}
     return None
 
+def parse_forward_port(html, tipo=None):
+    """Precio a fijar/entrega diferida por puerto (fila debajo de 'Disponible' en la misma
+    tabla, con la etiqueta del mes de entrega, ej. 'ENE 27', 'MAR 27'). Es la referencia de
+    'futuro' que usan cebada y girasol cuando MATBA Rosario no tiene cotizacion."""
+    soup = BeautifulSoup(html, 'html.parser')
+    text = soup.get_text(' ')
+    dm = re.search(r'(\d{2})/(\d{2})/(\d{4})', text)
+    if not dm:
+        return None
+    fecha = dm.group(0)
+    fecha_iso = '%s-%s-%s' % (dm.group(3), dm.group(2), dm.group(1))
+    for table in soup.find_all('table'):
+        rows = table.find_all('tr')
+        if not rows:
+            continue
+        header = [c.get_text(' ', strip=True) for c in rows[0].find_all(['td', 'th'])]
+        if not header:
+            continue
+        label = header[0].strip()
+        ports = header[1:]
+        if tipo:
+            if label.lower() != tipo.lower():
+                continue
+        elif label.lower() in ('forrajera', 'cervecera'):
+            continue
+        for row in rows[1:]:
+            cells = [c.get_text(' ', strip=True) for c in row.find_all(['td', 'th'])]
+            if not cells:
+                continue
+            rlabel = cells[0].strip()
+            if not rlabel or rlabel.lower().startswith('disponible'):
+                continue
+            vals = cells[1:]
+            for pref in PORT_PRIORITY:
+                for i, p in enumerate(ports):
+                    if pref.lower() in p.lower() and i < len(vals):
+                        v = num(vals[i])
+                        if v:
+                            return fecha_iso, {'fecha': fecha, 'contrato': rlabel, 'value': v}
+    return None
+
 def parse_futuro_matba(html):
     """Precio a futuro MATBA Rosario, contrato mas cercano (primera columna con valor de esa fila)."""
     soup = BeautifulSoup(html, 'html.parser')
@@ -244,9 +288,9 @@ def main():
             if r and r[0] not in data['novillo']:
                 data['novillo'][r[0]] = r[1]
 
-    # --- Granos: trigo / cebada (cervecera) / girasol -- disponible + futuro MATBA Rosario ---
+    # --- Granos: trigo / cebada (cervecera) / girasol -- disponible + futuro ---
     data.setdefault('granos', {})
-    for nombre, url_key, tipo in GRANOS_CFG:
+    for nombre, url_key, tipo, modo_futuro in GRANOS_CFG:
         data['granos'].setdefault(nombre, {'disponible': {}, 'futuro': {}})
         html = get(URLS[url_key])
         if not html:
@@ -254,7 +298,7 @@ def main():
         r = parse_disponible(html, tipo)
         if r:
             data['granos'][nombre]['disponible'][r[0]] = r[1]
-        rf = parse_futuro_matba(html)
+        rf = parse_futuro_matba(html) if modo_futuro == 'matba' else parse_forward_port(html, tipo)
         if rf:
             data['granos'][nombre]['futuro'][rf[0]] = rf[1]
         data['granos'][nombre]['disponible'] = dict(sorted(data['granos'][nombre]['disponible'].items()))

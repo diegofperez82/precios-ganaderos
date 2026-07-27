@@ -1,4 +1,4 @@
-const CACHE = 'precios-v3';
+const CACHE = 'precios-v4';
 const SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png',
   'https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js'];
 const NETWORK_FIRST = ['index.html', 'manifest.json', 'icon-192.png', 'icon-512.png'];
