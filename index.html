@@ -19,7 +19,7 @@
   .card { background:#fff; border:1px solid #e0e5dd; border-radius:12px; padding:14px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
   .card h2 { font-size:15px; margin:0 0 10px; }
   .chartbox { position:relative; height:300px; }
-  select { font-size:14px; padding:6px 10px; border:1px solid #c9d2c6; border-radius:8px; background:#fff; color:inherit; max-width:100%; margin-bottom:6px; }
+  select, input[type=month] { font-size:14px; padding:6px 10px; border:1px solid #c9d2c6; border-radius:8px; background:#fff; color:inherit; max-width:100%; margin-bottom:6px; }
   .stats { display:flex; gap:8px; flex-wrap:wrap; margin:4px 0 10px; }
   .chip { background:#eef3ec; border-radius:8px; padding:6px 12px; font-size:12px; }
   .chip b { display:block; font-size:17px; }
@@ -27,6 +27,11 @@
   #error { display:none; background:#fdecea; color:#b3261e; border:1px solid #f5c6c2; border-radius:8px; padding:10px 12px; font-size:13px; margin-bottom:12px; }
   .src { font-size:11px; color:#8a948a; margin-top:8px; }
   .src a { color:#4a7c46; }
+  .filtercard { padding:10px 14px; }
+  .filterrow { display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; }
+  .filterrow label { font-size:12px; color:#5f6b5f; display:flex; flex-direction:column; gap:3px; }
+  .filterrow button { font-size:13px; padding:7px 12px; border:1px solid #c9d2c6; border-radius:8px; background:#eef3ec; color:#2e5d2a; cursor:pointer; }
+  .filterrow button:active { background:#e0e9dc; }
 </style>
 </head>
 <body>
@@ -34,6 +39,14 @@
 <h1>🐂 Precios Ganaderos</h1>
 <div class="sub" id="status">Cargando…</div>
 <div id="error"></div>
+
+<div class="card filtercard">
+  <div class="filterrow">
+    <label>Desde <input type="month" id="fDesde"></label>
+    <label>Hasta <input type="month" id="fHasta"></label>
+    <button id="fClear" type="button">Ver todo</button>
+  </div>
+</div>
 
 <div class="card">
   <h2>Terneros por Kg. – Invernada Zona Centro</h2>
@@ -49,6 +62,27 @@
   <div class="chartbox"><canvas id="novChart"></canvas></div>
   <div class="src">Fuentes: <a href="https://www.elrural.com/mercados/ganadero/precios-indicativos/indice-novillo-arrendamiento-precios-indicativos/" target="_blank">elrural.com</a> / <a href="https://www.mercadoagroganadero.com.ar" target="_blank">MAG Cañuelas</a>. Precio promedio operaciones MAG, $/kg.</div>
 </div>
+
+<div class="card">
+  <h2>Trigo (U$S/Tn)</h2>
+  <div class="stats" id="trigoStats"></div>
+  <div class="chartbox"><canvas id="trigoChart"></canvas></div>
+  <div class="src">Fuente: <a href="https://www.elrural.com/mercados/granarios/trigo/" target="_blank">elrural.com</a>. Disponible: contado, plaza indicada. Futuro: MATBA Rosario, contrato más cercano.</div>
+</div>
+
+<div class="card">
+  <h2>Cebada Cervecera (U$S/Tn)</h2>
+  <div class="stats" id="cebadaStats"></div>
+  <div class="chartbox"><canvas id="cebadaChart"></canvas></div>
+  <div class="src">Fuente: <a href="https://www.elrural.com/mercados/granarios/cebada/" target="_blank">elrural.com</a>. Disponible: contado, plaza indicada. Por ahora no hay futuro MATBA Rosario cotizado para cebada.</div>
+</div>
+
+<div class="card">
+  <h2>Girasol (U$S/Tn)</h2>
+  <div class="stats" id="girasolStats"></div>
+  <div class="chartbox"><canvas id="girasolChart"></canvas></div>
+  <div class="src">Fuente: <a href="https://www.elrural.com/mercados/granarios/girasol/" target="_blank">elrural.com</a>. Disponible: contado, plaza indicada. Por ahora no hay futuro MATBA Rosario cotizado para girasol.</div>
+</div>
 </div>
 
 <script>
@@ -57,9 +91,47 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 const $ = id => document.getElementById(id);
 const fmt = n => n==null ? '–' : n.toLocaleString('es-AR', {maximumFractionDigits:2});
 const CAT_KEY = 'pg_cat';
+const DESDE_KEY = 'pg_desde';
+const HASTA_KEY = 'pg_hasta';
 let DATA = null, ternChart = null, novChart = null;
+let trigoChart = null, cebadaChart = null, girasolChart = null;
 
 function shortDate(iso){ const [y,m,d] = iso.split('-'); return d + '/' + m + '/' + y.slice(2); }
+function ym(iso){ return iso.slice(0,7); } // 'YYYY-MM'
+
+function filterKeys(keys){
+  const desde = $('fDesde').value, hasta = $('fHasta').value;
+  return keys.filter(k => {
+    const m = ym(k);
+    if (desde && m < desde) return false;
+    if (hasta && m > hasta) return false;
+    return true;
+  });
+}
+
+function granoKeys(nombre){
+  const g = (DATA.granos && DATA.granos[nombre]) || {disponible:{}, futuro:{}};
+  return [...new Set([...Object.keys(g.disponible||{}), ...Object.keys(g.futuro||{})])].sort();
+}
+
+function initFiltros(){
+  const allKeys = [...Object.keys(DATA.terneros), ...Object.keys(DATA.novillo),
+    ...granoKeys('trigo'), ...granoKeys('cebada'), ...granoKeys('girasol')].sort();
+  if (!allKeys.length) return;
+  const min = ym(allKeys[0]), max = ym(allKeys[allKeys.length - 1]);
+  $('fDesde').min = min; $('fDesde').max = max;
+  $('fHasta').min = min; $('fHasta').max = max;
+  const savedDesde = localStorage.getItem(DESDE_KEY), savedHasta = localStorage.getItem(HASTA_KEY);
+  if (savedDesde) $('fDesde').value = savedDesde;
+  if (savedHasta) $('fHasta').value = savedHasta;
+  $('fDesde').onchange = () => { localStorage.setItem(DESDE_KEY, $('fDesde').value); render(); };
+  $('fHasta').onchange = () => { localStorage.setItem(HASTA_KEY, $('fHasta').value); render(); };
+  $('fClear').onclick = () => {
+    $('fDesde').value = ''; $('fHasta').value = '';
+    localStorage.removeItem(DESDE_KEY); localStorage.removeItem(HASTA_KEY);
+    render();
+  };
+}
 
 function pctChip(label, cur, prev){
   let vh = '';
@@ -71,17 +143,15 @@ function pctChip(label, cur, prev){
 }
 
 function render(){
-  const tKeys = Object.keys(DATA.terneros).sort();
-  const nKeys = Object.keys(DATA.novillo).sort();
+  const tKeys = filterKeys(Object.keys(DATA.terneros).sort());
+  const nKeys = filterKeys(Object.keys(DATA.novillo).sort());
 
   const lastRows = tKeys.length ? DATA.terneros[tKeys[tKeys.length-1]].rows : {};
   const cats = [...new Set([].concat(Object.keys(lastRows), ...tKeys.map(k => Object.keys(DATA.terneros[k].rows))))];
   const sel = $('catSel');
-  if (!sel.options.length){
-    const prev = localStorage.getItem(CAT_KEY);
-    sel.innerHTML = cats.map(c => '<option' + (c === prev ? ' selected' : '') + '>' + c + '</option>').join('');
-    sel.onchange = () => { localStorage.setItem(CAT_KEY, sel.value); render(); };
-  }
+  const prevSel = sel.value || localStorage.getItem(CAT_KEY);
+  sel.innerHTML = cats.map(c => '<option' + (c === prevSel ? ' selected' : '') + '>' + c + '</option>').join('');
+  if (!sel.onchange) sel.onchange = () => { localStorage.setItem(CAT_KEY, sel.value); render(); };
   const cat = sel.value || cats[0];
 
   const g = k => tKeys.map(d => (DATA.terneros[d].rows[cat] || {})[k] ?? null);
@@ -102,7 +172,7 @@ function render(){
       scales:{ y:{ ticks:{ callback: v => '$ ' + fmt(v) } } } }
   });
   const pv = prom.filter(v => v != null), lastT = tKeys.length ? DATA.terneros[tKeys[tKeys.length-1]] : null;
-  $('ternStats').innerHTML = lastT ? pctChip('Promedio · sem. del ' + lastT.week, pv[pv.length-1], pv[pv.length-2]) : '';
+  $('ternStats').innerHTML = lastT ? pctChip('Promedio · sem. del ' + lastT.week, pv[pv.length-1], pv[pv.length-2]) : '<div class="chip">Sin datos en el rango elegido</div>';
 
   if (novChart) novChart.destroy();
   novChart = new Chart($('novChart'), {
@@ -116,14 +186,54 @@ function render(){
   });
   const lastN = nKeys.length ? DATA.novillo[nKeys[nKeys.length-1]] : null;
   const prevN = nKeys.length > 1 ? DATA.novillo[nKeys[nKeys.length-2]] : null;
-  $('novStats').innerHTML = lastN ? pctChip('Índice · sem. del ' + lastN.week, lastN.value, prevN ? prevN.value : null) : '';
+  $('novStats').innerHTML = lastN ? pctChip('Índice · sem. del ' + lastN.week, lastN.value, prevN ? prevN.value : null) : '<div class="chip">Sin datos en el rango elegido</div>';
+
+  renderGrano('trigo', 'trigoChart', 'trigoStats', c => trigoChart = c, () => trigoChart);
+  renderGrano('cebada', 'cebadaChart', 'cebadaStats', c => cebadaChart = c, () => cebadaChart);
+  renderGrano('girasol', 'girasolChart', 'girasolStats', c => girasolChart = c, () => girasolChart);
 
   $('status').textContent = 'Series semanales · Última actualización: ' + shortDate(DATA.updated);
 }
 
+function renderGrano(nombre, canvasId, statsId, setChart, getChart){
+  const g = (DATA.granos && DATA.granos[nombre]) || {disponible:{}, futuro:{}};
+  const keys = filterKeys(granoKeys(nombre));
+  const disp = keys.map(k => g.disponible[k] ? g.disponible[k].value : null);
+  const fut = keys.map(k => g.futuro[k] ? g.futuro[k].value : null);
+  const hasFut = fut.some(v => v != null);
+
+  const datasets = [
+    { label:'Disponible', data:disp, borderColor:'#2e5d2a', backgroundColor:'#2e5d2a', pointRadius:3, tension:.25, spanGaps:true }
+  ];
+  if (hasFut) datasets.push({ label:'Futuro (MATBA Rosario)', data:fut, borderColor:'#8a5a2b', backgroundColor:'#8a5a2b', pointRadius:3, tension:.25, borderDash:[5,3], spanGaps:true });
+
+  if (getChart()) getChart().destroy();
+  setChart(new Chart($(canvasId), {
+    type: 'line',
+    data: { labels: keys.map(shortDate), datasets },
+    options: { responsive:true, maintainAspectRatio:false, spanGaps:true,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{ tooltip:{ callbacks:{ label: c => c.dataset.label + ': U$S ' + fmt(c.parsed.y) } } },
+      scales:{ y:{ ticks:{ callback: v => 'U$S ' + fmt(v) } } } }
+  }));
+
+  const lastKey = keys.length ? keys[keys.length-1] : null;
+  const dispKeys = keys.filter(k => g.disponible[k]);
+  const lastDisp = dispKeys.length ? g.disponible[dispKeys[dispKeys.length-1]] : null;
+  const prevDisp = dispKeys.length > 1 ? g.disponible[dispKeys[dispKeys.length-2]] : null;
+  let html = '';
+  if (lastDisp) html += pctChip('Disponible (' + lastDisp.plaza + ') · ' + lastDisp.fecha, lastDisp.value, prevDisp ? prevDisp.value : null);
+  if (hasFut){
+    const futKeys = keys.filter(k => g.futuro[k]);
+    const lf = futKeys.length ? g.futuro[futKeys[futKeys.length-1]] : null;
+    if (lf) html += '<div class="chip">Futuro ' + lf.contrato + '<b>U$S ' + fmt(lf.value) + '</b></div>';
+  }
+  $(statsId).innerHTML = html || '<div class="chip">Sin datos en el rango elegido</div>';
+}
+
 fetch('data.json?t=' + Date.now())
   .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-  .then(d => { DATA = d; render(); })
+  .then(d => { DATA = d; initFiltros(); render(); })
   .catch(e => {
     $('error').style.display = 'block';
     $('error').textContent = 'No se pudieron cargar los datos (' + e.message + '). Probá recargar la página.';

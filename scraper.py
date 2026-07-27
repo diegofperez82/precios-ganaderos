@@ -11,7 +11,17 @@ URLS = {
     'novillo_live':  'https://www.elrural.com/mercados/ganadero/precios-indicativos/indice-novillo-arrendamiento-precios-indicativos/',
     'novillo_idx':   'https://www.elrural.com/historicos/ganadero/indice-novillo-arrendamiento-precios-indicativos/',
     'mag':           'https://www.mercadoagroganadero.com.ar/dll/inicio.dll',
+    'trigo_live':    'https://www.elrural.com/mercados/granarios/trigo/',
+    'cebada_live':   'https://www.elrural.com/mercados/granarios/cebada/',
+    'girasol_live':  'https://www.elrural.com/mercados/granarios/girasol/',
 }
+# Granos a trackear: (nombre, url, tipo de sub-tabla si aplica -- p.ej. cebada tiene Forrajera/Cervecera)
+GRANOS_CFG = [
+    ('trigo', 'trigo_live', None),
+    ('cebada', 'cebada_live', 'Cervecera'),
+    ('girasol', 'girasol_live', None),
+]
+PORT_PRIORITY = ['Rosario', 'Quequén', 'Quequen', 'Bahía Blanca', 'Bahia Blanca', 'Ba. Blanca', 'Dársena', 'Darsena', 'Las Palmas']
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -127,6 +137,69 @@ def parse_mag(html):
             return end, {'week': 'MAG al ' + dm.group(1), 'value': v}
     return None
 
+def parse_disponible(html, tipo=None):
+    """Precio disponible (contado) de un grano. tipo=None para trigo/girasol (una sola tabla
+    de disponible); tipo='Cervecera'/'Forrajera' para cebada, que tiene dos sub-tablas.
+    Prioriza la plaza segun PORT_PRIORITY, salteando celdas vacias o 'S/C' (sin cotizacion)."""
+    soup = BeautifulSoup(html, 'html.parser')
+    text = soup.get_text(' ')
+    dm = re.search(r'(\d{2})/(\d{2})/(\d{4})', text)
+    if not dm:
+        return None
+    fecha = dm.group(0)
+    fecha_iso = '%s-%s-%s' % (dm.group(3), dm.group(2), dm.group(1))
+    for table in soup.find_all('table'):
+        rows = table.find_all('tr')
+        if not rows:
+            continue
+        header = [c.get_text(' ', strip=True) for c in rows[0].find_all(['td', 'th'])]
+        if not header:
+            continue
+        label = header[0].strip()
+        ports = header[1:]
+        if tipo:
+            if label.lower() != tipo.lower():
+                continue
+        elif label.lower() in ('forrajera', 'cervecera'):
+            continue  # evita mezclar con las sub-tablas de cebada cuando tipo=None
+        for row in rows[1:]:
+            cells = [c.get_text(' ', strip=True) for c in row.find_all(['td', 'th'])]
+            if not cells or not cells[0].strip().lower().startswith('disponible'):
+                continue
+            vals = cells[1:]
+            for pref in PORT_PRIORITY:
+                for i, p in enumerate(ports):
+                    if pref.lower() in p.lower() and i < len(vals):
+                        v = num(vals[i])
+                        if v:
+                            return fecha_iso, {'fecha': fecha, 'plaza': ports[i].strip(), 'value': v}
+    return None
+
+def parse_futuro_matba(html):
+    """Precio a futuro MATBA Rosario, contrato mas cercano (primera columna con valor de esa fila)."""
+    soup = BeautifulSoup(html, 'html.parser')
+    text = soup.get_text(' ')
+    dm = re.search(r'(\d{2})/(\d{2})/(\d{4})', text)
+    if not dm:
+        return None
+    fecha = dm.group(0)
+    fecha_iso = '%s-%s-%s' % (dm.group(3), dm.group(2), dm.group(1))
+    for table in soup.find_all('table'):
+        rows = table.find_all('tr')
+        if not rows:
+            continue
+        header = [c.get_text(' ', strip=True) for c in rows[0].find_all(['td', 'th'])]
+        for row in rows:
+            cells = [c.get_text(' ', strip=True) for c in row.find_all(['td', 'th'])]
+            if cells and re.match(r'MATBA\s+ROSARIO', cells[0], re.I):
+                contratos = header[1:]
+                for i, v in enumerate(cells[1:]):
+                    val = num(v)
+                    if val:
+                        contrato = contratos[i].strip() if i < len(contratos) else ''
+                        return fecha_iso, {'fecha': fecha, 'contrato': contrato, 'value': val}
+    return None
+
 def main():
     with open('data.json', encoding='utf-8') as f:
         data = json.load(f)
@@ -170,6 +243,22 @@ def main():
             r = parse_mag(html)
             if r and r[0] not in data['novillo']:
                 data['novillo'][r[0]] = r[1]
+
+    # --- Granos: trigo / cebada (cervecera) / girasol -- disponible + futuro MATBA Rosario ---
+    data.setdefault('granos', {})
+    for nombre, url_key, tipo in GRANOS_CFG:
+        data['granos'].setdefault(nombre, {'disponible': {}, 'futuro': {}})
+        html = get(URLS[url_key])
+        if not html:
+            continue
+        r = parse_disponible(html, tipo)
+        if r:
+            data['granos'][nombre]['disponible'][r[0]] = r[1]
+        rf = parse_futuro_matba(html)
+        if rf:
+            data['granos'][nombre]['futuro'][rf[0]] = rf[1]
+        data['granos'][nombre]['disponible'] = dict(sorted(data['granos'][nombre]['disponible'].items()))
+        data['granos'][nombre]['futuro'] = dict(sorted(data['granos'][nombre]['futuro'].items()))
 
     data['terneros'] = dict(sorted(data['terneros'].items()))
     data['novillo'] = dict(sorted(data['novillo'].items()))
