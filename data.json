@@ -1,5 +1,5 @@
 {
- "updated": "2026-07-27",
+ "updated": "2026-08-01",
  "terneros": {
   "2026-02-05": {
    "week": "29-01-2026 al 05-02-2026",
@@ -1102,48 +1102,160 @@
  "granos": {
   "trigo": {
    "disponible": {
-    "2026-06-26": {"fecha": "26/06/2026", "plaza": "Rosario", "value": 201.0},
-    "2026-07-03": {"fecha": "03/07/2026", "plaza": "Rosario", "value": 200.0},
-    "2026-07-08": {"fecha": "08/07/2026", "plaza": "Rosario", "value": 203.0},
-    "2026-07-17": {"fecha": "17/07/2026", "plaza": "Rosario", "value": 209.0},
-    "2026-07-24": {"fecha": "24/07/2026", "plaza": "Rosario", "value": 214.0}
+    "2026-06-26": {
+     "fecha": "26/06/2026",
+     "plaza": "Rosario",
+     "value": 201.0
+    },
+    "2026-07-03": {
+     "fecha": "03/07/2026",
+     "plaza": "Rosario",
+     "value": 200.0
+    },
+    "2026-07-08": {
+     "fecha": "08/07/2026",
+     "plaza": "Rosario",
+     "value": 203.0
+    },
+    "2026-07-17": {
+     "fecha": "17/07/2026",
+     "plaza": "Rosario",
+     "value": 209.0
+    },
+    "2026-07-24": {
+     "fecha": "24/07/2026",
+     "plaza": "Rosario",
+     "value": 214.0
+    }
    },
    "futuro": {
-    "2026-06-26": {"fecha": "26/06/2026", "contrato": "JUL 26", "value": 201.0},
-    "2026-07-03": {"fecha": "03/07/2026", "contrato": "JUL 26", "value": 200.0},
-    "2026-07-08": {"fecha": "08/07/2026", "contrato": "JUL 26", "value": 206.0},
-    "2026-07-17": {"fecha": "17/07/2026", "contrato": "DIC 26", "value": 226.0},
-    "2026-07-24": {"fecha": "24/07/2026", "contrato": "DIC 26", "value": 220.0}
+    "2026-06-26": {
+     "fecha": "26/06/2026",
+     "contrato": "JUL 26",
+     "value": 201.0
+    },
+    "2026-07-03": {
+     "fecha": "03/07/2026",
+     "contrato": "JUL 26",
+     "value": 200.0
+    },
+    "2026-07-08": {
+     "fecha": "08/07/2026",
+     "contrato": "JUL 26",
+     "value": 206.0
+    },
+    "2026-07-17": {
+     "fecha": "17/07/2026",
+     "contrato": "DIC 26",
+     "value": 226.0
+    },
+    "2026-07-24": {
+     "fecha": "24/07/2026",
+     "contrato": "DIC 26",
+     "value": 220.0
+    }
    }
   },
   "cebada": {
    "disponible": {
-    "2026-07-03": {"fecha": "03/07/2026", "plaza": "Quequén/Bahía Blanca", "value": 230.0},
-    "2026-07-08": {"fecha": "08/07/2026", "plaza": "Quequén/Bahía Blanca", "value": 230.0},
-    "2026-07-17": {"fecha": "17/07/2026", "plaza": "Quequén/Bahía Blanca", "value": 230.0},
-    "2026-07-24": {"fecha": "24/07/2026", "plaza": "Quequén/Bahía Blanca", "value": 235.0}
+    "2026-07-03": {
+     "fecha": "03/07/2026",
+     "plaza": "Quequén/Bahía Blanca",
+     "value": 230.0
+    },
+    "2026-07-08": {
+     "fecha": "08/07/2026",
+     "plaza": "Quequén/Bahía Blanca",
+     "value": 230.0
+    },
+    "2026-07-17": {
+     "fecha": "17/07/2026",
+     "plaza": "Quequén/Bahía Blanca",
+     "value": 230.0
+    },
+    "2026-07-24": {
+     "fecha": "24/07/2026",
+     "plaza": "Quequén/Bahía Blanca",
+     "value": 235.0
+    }
    },
    "futuro": {
-    "2026-06-26": {"fecha": "26/06/2026", "contrato": "ENE 27", "value": 225.0},
-    "2026-07-03": {"fecha": "03/07/2026", "contrato": "ENE 27", "value": 225.0},
-    "2026-07-08": {"fecha": "08/07/2026", "contrato": "ENE 27", "value": 225.0},
-    "2026-07-17": {"fecha": "17/07/2026", "contrato": "ENE 27", "value": 235.0},
-    "2026-07-24": {"fecha": "24/07/2026", "contrato": "ENE 27", "value": 235.0}
+    "2026-06-26": {
+     "fecha": "26/06/2026",
+     "contrato": "ENE 27",
+     "value": 225.0
+    },
+    "2026-07-03": {
+     "fecha": "03/07/2026",
+     "contrato": "ENE 27",
+     "value": 225.0
+    },
+    "2026-07-08": {
+     "fecha": "08/07/2026",
+     "contrato": "ENE 27",
+     "value": 225.0
+    },
+    "2026-07-17": {
+     "fecha": "17/07/2026",
+     "contrato": "ENE 27",
+     "value": 235.0
+    },
+    "2026-07-24": {
+     "fecha": "24/07/2026",
+     "contrato": "ENE 27",
+     "value": 235.0
+    }
    }
   },
   "girasol": {
    "disponible": {
-    "2026-06-26": {"fecha": "26/06/2026", "plaza": "Quequén/Bahía Blanca", "value": 400.0},
-    "2026-07-03": {"fecha": "03/07/2026", "plaza": "Quequén/Bahía Blanca", "value": 400.0},
-    "2026-07-08": {"fecha": "08/07/2026", "plaza": "Quequén/Bahía Blanca", "value": 400.0},
-    "2026-07-17": {"fecha": "17/07/2026", "plaza": "Quequén/Bahía Blanca", "value": 400.0},
-    "2026-07-24": {"fecha": "24/07/2026", "plaza": "Quequén/Bahía Blanca", "value": 400.0}
+    "2026-06-26": {
+     "fecha": "26/06/2026",
+     "plaza": "Quequén/Bahía Blanca",
+     "value": 400.0
+    },
+    "2026-07-03": {
+     "fecha": "03/07/2026",
+     "plaza": "Quequén/Bahía Blanca",
+     "value": 400.0
+    },
+    "2026-07-08": {
+     "fecha": "08/07/2026",
+     "plaza": "Quequén/Bahía Blanca",
+     "value": 400.0
+    },
+    "2026-07-17": {
+     "fecha": "17/07/2026",
+     "plaza": "Quequén/Bahía Blanca",
+     "value": 400.0
+    },
+    "2026-07-24": {
+     "fecha": "24/07/2026",
+     "plaza": "Quequén/Bahía Blanca",
+     "value": 400.0
+    }
    },
    "futuro": {
-    "2026-07-03": {"fecha": "03/07/2026", "contrato": "MAR 27", "value": 360.0},
-    "2026-07-08": {"fecha": "08/07/2026", "contrato": "MAR 27", "value": 360.0},
-    "2026-07-17": {"fecha": "17/07/2026", "contrato": "MAR 27", "value": 370.0},
-    "2026-07-24": {"fecha": "24/07/2026", "contrato": "MAR 27", "value": 380.0}
+    "2026-07-03": {
+     "fecha": "03/07/2026",
+     "contrato": "MAR 27",
+     "value": 360.0
+    },
+    "2026-07-08": {
+     "fecha": "08/07/2026",
+     "contrato": "MAR 27",
+     "value": 360.0
+    },
+    "2026-07-17": {
+     "fecha": "17/07/2026",
+     "contrato": "MAR 27",
+     "value": 370.0
+    },
+    "2026-07-24": {
+     "fecha": "24/07/2026",
+     "contrato": "MAR 27",
+     "value": 380.0
+    }
    }
   }
  }
